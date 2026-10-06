@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { useParams, useNavigate } from "react-router-dom";
 import AdyenCheckout from "@adyen/adyen-web";
 import "@adyen/adyen-web/dist/adyen.css";
+import { useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate, useParams } from "react-router-dom";
 import { initiateCheckout } from "../../app/paymentSlice";
 import { getRedirectUrl } from "../../util/redirect";
 
@@ -16,11 +16,11 @@ export const PaymentContainer = () => {
       </div>
     </div>
   );
-}
+};
 
 const Checkout = () => {
   const dispatch = useDispatch();
-  const payment = useSelector(state => state.payment);
+  const payment = useSelector((state) => state.payment);
 
   const navigate = useNavigate();
 
@@ -30,8 +30,7 @@ const Checkout = () => {
 
   useEffect(() => {
     dispatch(initiateCheckout(type));
-  }, [dispatch, type])
-
+  }, [dispatch, type]);
 
   useEffect(() => {
     const { error } = payment;
@@ -39,8 +38,7 @@ const Checkout = () => {
     if (error) {
       navigate(`/status/error?reason=${error}`, { replace: true });
     }
-  }, [payment, navigate])
-
+  }, [payment, navigate]);
 
   useEffect(() => {
     const { config, session } = payment;
@@ -54,25 +52,27 @@ const Checkout = () => {
       const checkout = await AdyenCheckout({
         ...config,
         session,
-        onPaymentCompleted: (response, _component) =>
-          navigate(getRedirectUrl(response.resultCode), { replace: true }),
+        onPaymentCompleted: (response, _component) => navigate(getRedirectUrl(response.resultCode), { replace: true }),
         onError: (error, _component) => {
           console.error(error);
           navigate(`/status/error?reason=${error.message}`, { replace: true });
+        },
+        onChange: (state, _component) => {
+          console.log(state.data.paymentMethod);
         },
       });
 
       if (paymentContainer.current) {
         checkout.create(type).mount(paymentContainer.current);
       }
-    }
+    };
 
     createCheckout();
-  }, [payment, type, navigate])
+  }, [payment, type, navigate]);
 
   return (
     <div className="payment-container">
       <div ref={paymentContainer} className="payment"></div>
     </div>
   );
-}
+};

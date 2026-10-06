@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+import {createSlice} from "@reduxjs/toolkit";
 
 export const slice = createSlice({
   name: "payment",
@@ -18,15 +18,15 @@ export const slice = createSlice({
           holderNameRequired: true,
           name: "Credit or debit card",
           amount: {
-            value: 1000, // 10€ in minor units
-            currency: "EUR",
+            value: 10,
+            currency: "SGD",
           },
         },
       },
       locale: "en_US",
       showPayButton: true,
       clientKey: process.env.REACT_APP_CLIENT_KEY,
-      environment: "test",
+      environment: "live",
     },
   },
   reducers: {
@@ -49,7 +49,7 @@ export const slice = createSlice({
   },
 });
 
-export const { paymentSession, paymentDataStore } = slice.actions;
+export const {paymentSession, paymentDataStore} = slice.actions;
 
 export const initiateCheckout = (type) => async (dispatch) => {
   const response = await fetch(`/api/sessions?type=${type}`, {

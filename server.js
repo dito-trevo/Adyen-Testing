@@ -24,9 +24,12 @@ dotenv.config({
 // Adyen Node.js API library boilerplate (configuration, etc.)
 const config = new Config();
 config.apiKey = process.env.API_KEY;
+config.environment = "LIVE";
+
 const client = new Client({ config });
-client.setEnvironment("TEST");
+client.setEnvironment("LIVE", process.env.PREFIX); // change to LIVE for production
 const checkout = new CheckoutAPI(client);
+
 const modification = new Modification(client);
 const validator = new hmacValidator();
 
@@ -38,7 +41,6 @@ app.get("/api/getPaymentDataStore", async (req, res) => res.json(paymentStore));
 
 // Submitting a payment
 app.post("/api/sessions", async (req, res) => {
-
   try {
     // unique ref for the transaction
     const orderRef = uuid();
@@ -47,16 +49,20 @@ app.post("/api/sessions", async (req, res) => {
 
     // Ideally the data passed here should be computed based on business logic
     const response = await checkout.sessions({
-      amount: { currency: "EUR", value: 1000 }, // value is 10€ in minor units
+      amount: { currency: "SGD", value: 10 }, // value is 10 SGD in minor units
       reference: orderRef, // required
       merchantAccount: process.env.MERCHANT_ACCOUNT, // required
       channel: "Web", // required
       returnUrl: `http://localhost:8080/redirect?orderRef=${orderRef}`, // required for 3ds2 redirect flow
+      captureDelayHours: "",
+      additionalData: {
+        authorisationType: "PreAuth",
+      },
     });
 
     // save transaction in memory
     paymentStore[orderRef] = {
-      amount: { currency: "EUR", value: 1000 },
+      amount: { currency: "SGD", value: 10 },
       reference: orderRef,
     };
 
@@ -95,44 +101,40 @@ app.post("/api/webhook/notification", async (req, res) => {
 
   notificationRequestItems.forEach(({ NotificationRequestItem }) => {
     console.info("Received webhook notification", NotificationRequestItem);
-    try{
+    try {
       if (validator.validateHMAC(NotificationRequestItem, process.env.HMAC_KEY)) {
-          if (NotificationRequestItem.success === "true") {
-            // Process the notification based on the eventCode
-            if (NotificationRequestItem.eventCode === "AUTHORISATION"){
-              const payment = paymentStore[NotificationRequestItem.merchantReference];
-              if(payment){
-                payment.status = "Authorised";
-                payment.paymentRef = NotificationRequestItem.pspReference;
+        if (NotificationRequestItem.success === "true") {
+          // Process the notification based on the eventCode
+          if (NotificationRequestItem.eventCode === "AUTHORISATION") {
+            const payment = paymentStore[NotificationRequestItem.merchantReference];
+            if (payment) {
+              payment.status = "Authorised";
+              payment.paymentRef = NotificationRequestItem.pspReference;
+            }
+          } else if (NotificationRequestItem.eventCode === "CANCEL_OR_REFUND") {
+            const payment = findPayment(NotificationRequestItem.pspReference);
+            if (payment) {
+              console.log("Payment found: ", JSON.stringify(payment));
+              // update with additionalData.modification.action
+              if (
+                "modification.action" in NotificationRequestItem.additionalData &&
+                "refund" === NotificationRequestItem.additionalData["modification.action"]
+              ) {
+                payment.status = "Refunded";
+              } else {
+                payment.status = "Cancelled";
               }
             }
-            else if (NotificationRequestItem.eventCode === "CANCEL_OR_REFUND") {
-              const payment = findPayment(NotificationRequestItem.pspReference);
-              if(payment){
-                console.log("Payment found: ", JSON.stringify(payment));
-                // update with additionalData.modification.action
-                if (
-                  "modification.action" in NotificationRequestItem.additionalData &&
-                  "refund" === NotificationRequestItem.additionalData["modification.action"]
-                ) {
-                  payment.status = "Refunded";
-                } else {
-                  payment.status = "Cancelled";
-                }
-              }
-            } 
-            else {
-              console.info("skipping non actionable webhook");
-            }
+          } else {
+            console.info("skipping non actionable webhook");
           }
+        }
+      } else {
+        console.error("NotificationRequest with invalid HMAC key received");
       }
-      else {
-          console.error("NotificationRequest with invalid HMAC key received");
-      }
-    }catch(err){
+    } catch (err) {
       console.error("Error: ", err);
     }
-
   });
 
   res.send("[accepted]");
